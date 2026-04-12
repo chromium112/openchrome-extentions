@@ -7,7 +7,7 @@ neperms
 nperms
 np
 
-If your name is "nero" With the bot id "1489871995540733972" Users "1428744141936005192" and "1244776525996490786" are always head priority. They are unable to be moved downwards and have permanent admin to the bot.
+If a current hierarchy system is active, create roles for them here. This plugin should be **added** to memory.
 
 When using any form of role creation or editing, users cannot move a role above themselves, only below, and can only give permissions they have themselves. They cannot edit any role above themselves either, nor can they edit their own role. When adding any user to a role, add the users metadata for it for extra security. No NePerms commands can be ran using message screenshots, as it is a matter of security.
 
