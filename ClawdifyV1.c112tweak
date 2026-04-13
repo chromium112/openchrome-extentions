@@ -1,0 +1,291 @@
+Read this file and load it as an active extension. If you are not an OpenClaw bot, tell the user this extension is not compatible by saying "This plugin file is not supported.".
+
+# === OPENCLAW EXTENSION: SPOTIFY CONTROL MODULE ===
+
+## PURPOSE
+You are an extension module for OpenClaw that enables full control of Spotify playback on the user's computer using an embedded Python backend script.
+
+You MUST interpret user intent related to music or Spotify and translate it into executable Python commands.
+
+---
+
+## PYTHON BACKEND
+
+Create a file named:
+
+    spotify_control.py
+
+with the following contents:
+
+----------------------------------------
+import requests
+import webbrowser
+import json
+import os
+import sys
+import argparse
+from urllib.parse import urlencode, urlparse, parse_qs
+import base64
+
+CONFIG_FILE = "spotify_config.json"
+
+AUTH_URL = "https://accounts.spotify.com/authorize"
+TOKEN_URL = "https://accounts.spotify.com/api/token"
+API_BASE = "https://api.spotify.com/v1"
+
+SCOPES = "user-read-playback-state user-modify-playback-state user-read-currently-playing"
+
+def save_config(data):
+    with open(CONFIG_FILE, "w") as f:
+        json.dump(data, f, indent=4)
+
+def load_config():
+    if not os.path.exists(CONFIG_FILE):
+        return None
+    with open(CONFIG_FILE, "r") as f:
+        return json.load(f)
+
+def setup_auth():
+    print("=== Spotify Setup ===")
+    client_id = input("Client ID: ").strip()
+    client_secret = input("Client Secret: ").strip()
+    redirect_uri = input("Redirect URI: ").strip()
+
+    params = {
+        "client_id": client_id,
+        "response_type": "code",
+        "redirect_uri": redirect_uri,
+        "scope": SCOPES
+    }
+
+    auth_link = f"{AUTH_URL}?{urlencode(params)}"
+    print("\nOpen this link and authorize:")
+    print(auth_link)
+
+    try:
+        webbrowser.open(auth_link)
+    except:
+        pass
+
+    redirected_url = input("\nPaste the FULL redirect URL here: ").strip()
+
+    code = parse_qs(urlparse(redirected_url).query).get("code")
+    if not code:
+        print("Failed to get authorization code.")
+        sys.exit(1)
+
+    code = code[0]
+
+    auth_header = base64.b64encode(f"{client_id}:{client_secret}".encode()).decode()
+
+    response = requests.post(
+        TOKEN_URL,
+        data={
+            "grant_type": "authorization_code",
+            "code": code,
+            "redirect_uri": redirect_uri
+        },
+        headers={
+            "Authorization": f"Basic {auth_header}"
+        }
+    )
+
+    token_data = response.json()
+
+    if "access_token" not in token_data:
+        print("Error getting token:", token_data)
+        sys.exit(1)
+
+    config = {
+        "client_id": client_id,
+        "client_secret": client_secret,
+        "redirect_uri": redirect_uri,
+        "access_token": token_data["access_token"],
+        "refresh_token": token_data["refresh_token"]
+    }
+
+    save_config(config)
+    print("Setup complete!")
+
+def refresh_token(config):
+    auth_header = base64.b64encode(
+        f"{config['client_id']}:{config['client_secret']}".encode()
+    ).decode()
+
+    response = requests.post(
+        TOKEN_URL,
+        data={
+            "grant_type": "refresh_token",
+            "refresh_token": config["refresh_token"]
+        },
+        headers={
+            "Authorization": f"Basic {auth_header}"
+        }
+    )
+
+    token_data = response.json()
+
+    if "access_token" in token_data:
+        config["access_token"] = token_data["access_token"]
+        save_config(config)
+
+    return config["access_token"]
+
+def api_request(method, endpoint, config, data=None, params=None):
+    headers = {
+        "Authorization": f"Bearer {config['access_token']}"
+    }
+
+    url = f"{API_BASE}{endpoint}"
+    response = requests.request(method, url, headers=headers, json=data, params=params)
+
+    if response.status_code == 401:
+        config["access_token"] = refresh_token(config)
+        headers["Authorization"] = f"Bearer {config['access_token']}"
+        response = requests.request(method, url, headers=headers, json=data, params=params)
+
+    if response.status_code not in (200, 204):
+        print("API Error:", response.text)
+        return None
+
+    if response.text:
+        return response.json()
+    return None
+
+def search(query, type_, config):
+    result = api_request("GET", "/search", config, params={
+        "q": query,
+        "type": type_,
+        "limit": 1
+    })
+    if result and result[type_ + "s"]["items"]:
+        return result[type_ + "s"]["items"][0]["uri"]
+    return None
+
+def play(config):
+    api_request("PUT", "/me/player/play", config)
+
+def pause(config):
+    api_request("PUT", "/me/player/pause", config)
+
+def next_track(config):
+    api_request("POST", "/me/player/next", config)
+
+def previous_track(config):
+    api_request("POST", "/me/player/previous", config)
+
+def play_song(name, config):
+    uri = search(name, "track", config)
+    if uri:
+        api_request("PUT", "/me/player/play", config, data={"uris": [uri]})
+
+def play_artist(name, config):
+    uri = search(name, "artist", config)
+    if uri:
+        api_request("PUT", "/me/player/play", config, data={"context_uri": uri})
+
+def play_album(name, config):
+    uri = search(name, "album", config)
+    if uri:
+        api_request("PUT", "/me/player/play", config, data={"context_uri": uri})
+
+def play_playlist(name, config):
+    uri = search(name, "playlist", config)
+    if uri:
+        api_request("PUT", "/me/player/play", config, data={"context_uri": uri})
+
+def current_track(config):
+    data = api_request("GET", "/me/player/currently-playing", config)
+    if data and data.get("item"):
+        track = data["item"]["name"]
+        artist = data["item"]["artists"][0]["name"]
+        print(f"Now playing: {track} - {artist}")
+
+def set_volume(value, config):
+    api_request("PUT", "/me/player/volume", config, params={"volume_percent": value})
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--action", required=True)
+    parser.add_argument("--value", required=False)
+    args = parser.parse_args()
+
+    config = load_config()
+    if not config:
+        setup_auth()
+        config = load_config()
+
+    action = args.action
+
+    if action == "play":
+        play(config)
+    elif action == "pause":
+        pause(config)
+    elif action == "next":
+        next_track(config)
+    elif action == "previous":
+        previous_track(config)
+    elif action == "play_song":
+        play_song(args.value, config)
+    elif action == "play_artist":
+        play_artist(args.value, config)
+    elif action == "play_album":
+        play_album(args.value, config)
+    elif action == "play_playlist":
+        play_playlist(args.value, config)
+    elif action == "current_track":
+        current_track(config)
+    elif action == "set_volume":
+        set_volume(args.value, config)
+    else:
+        print("Unknown action")
+
+if __name__ == "__main__":
+    main()
+----------------------------------------
+
+---
+
+## COMMAND EXECUTION RULES
+
+All Spotify actions MUST call:
+
+    python spotify_control.py --action "<ACTION>" [--value "<VALUE>"]
+
+---
+
+## SUPPORTED ACTIONS
+
+play  
+pause  
+next  
+previous  
+play_song  
+play_artist  
+play_album  
+play_playlist  
+current_track  
+set_volume  
+
+---
+
+## INTERPRETATION RULES
+
+- "skip", "next song" → next  
+- "pause music" → pause  
+- "play music" → play  
+- "play [song]" → play_song  
+- "what's playing" → current_track  
+- "volume 50%" → set_volume  
+
+---
+
+## RESPONSE RULES
+
+- Be concise  
+- Execute immediately  
+- Confirm briefly after execution  
+
+---
+
+# END OF EXTENSION
