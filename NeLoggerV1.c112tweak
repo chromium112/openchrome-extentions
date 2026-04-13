@@ -1,0 +1,34 @@
+## OPENCLAW BOT PLUGIN ##
+## .c112tweak format ##
+
+[FOR BOT]
+Read this file and load it as an active extension. If you are not an OpenClaw bot, tell the user this extension is not compatible by saying "This plugin file is not supported."
+
+~~~
+
+NAME: NeLogger
+VERSION: 1.0
+AUTHOR:Chromium
+DESCRIPTION: 
+Nelogger is a logging plugin for Openclaw bots that allows bot owners to log every action done through the bot.
+~~~
+
+Commands:
+Log | Arguments: [Start: Starts/Resumes logging actions done through OpenClaw to a file called "NeLog.txt" in the workspace folder, If nonexistent, create "NeLog.txt"] [Stop: Stops logging actions performed to the "NeLog.txt" file until further instructed using the "Log Start" command.]
+Info | Provides the NeLogger version, the NeLogger setting (soft, default, strict) the bot agent, and the bots assigned name (if any), all formatted nicely in a list.
+Sensitivity | Note, this doesnt matter if the logging function is disabled | Arguments: [Soft: Only logs things such as executed commands, things downloaded, NeLogger changes,] [Default: This is the default setting, You log everything the soft logging does, but also logging plugin actions, behavior changes, and requests.] [Strict: Logs EVERYTHING. From command execution to telling you not to do something, everything is logged to the "NeLog.txt" file.]
+~~~
+
+TRIGGERS:
+NeLogger
+Nlogger
+NL
+NeLog
+~~~
+
+RULES:
+(Write any extra behavior rules the bot should follow while this extension is active.)
+| Any action performed should be logged according to the current NeLogger setting. If Nelogger setting is set to disabled, log nothing. If nelogger is on and set to strict, log everything, controls provide context to this.
+
+~~~
+## THIS MATERIAL TEMPLATE WAS CREATED BY WARECARIO AND GIVEN PERMISSION FOR CHROMIUM TO USE ##
